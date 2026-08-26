@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+build/
+
+# Backend
+backend/downloads/
+backend/.env
+
+# Frontend
+frontend/.react-router/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+*.log
