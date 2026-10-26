@@ -2,18 +2,19 @@
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --color-player-base: #0b0b0d;
-  --color-player-sidebar: #101013;
-  --color-player-panel: #151518;
-  --color-player-raised: #202024;
-  --color-player-dock: #111114;
-  --color-player-text: #f6f1e8;
-  --color-player-muted: #a7a4a0;
-  --color-player-accent: #e7a94b;
-  --color-player-accent-bright: #f0bd67;
+  --color-player-base: #0D1513;
+  --color-player-sidebar: #101A17;
+  --color-player-panel: #15211D;
+  --color-player-raised: #203129;
+  --color-player-dock: #101A17;
+  --color-player-text: #EDF5EF;
+  --color-player-muted: #A4B4AA;
+  --color-player-accent: #76C7A5;
+  --color-player-accent-bright: #98DAB9;
+  --color-player-info: #78BCE5;
 }
 
-html { background: #0b0b0d; }
+html { background: #0D1513; }
 body { @apply bg-player-base font-sans text-player-text antialiased; }
 
 button:not(:disabled), a[href], select, input[type="range"] { cursor: pointer; }
@@ -22,12 +23,15 @@ button:disabled { cursor: not-allowed; }
 .player-range {
   appearance: none;
   border-radius: 999px;
-  background: linear-gradient(to right, #e7a94b var(--progress), rgba(255, 255, 255, .14) var(--progress));
+  background: linear-gradient(to right, #76C7A5 var(--progress), rgba(237, 245, 239, .14) var(--progress));
 }
-.player-range::-webkit-slider-thumb { appearance: none; height: .7rem; width: .7rem; border-radius: 999px; background: #f6f1e8; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
-.player-range::-moz-range-thumb { height: .7rem; width: .7rem; border: 0; border-radius: 999px; background: #f6f1e8; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
+.player-range::-webkit-slider-thumb { appearance: none; height: .7rem; width: .7rem; border-radius: 999px; background: #EDF5EF; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
+.player-range::-moz-range-thumb { height: .7rem; width: .7rem; border: 0; border-radius: 999px; background: #EDF5EF; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
 
 @keyframes slide-up { from { transform: translateY(1rem); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .animate-slide-up { animation: slide-up .22s ease-out; }
+
+@keyframes download-progress { from { transform: translateX(-150%); } to { transform: translateX(360%); } }
+.animate-download-progress { animation: download-progress 1.35s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) { *, ::before, ::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }

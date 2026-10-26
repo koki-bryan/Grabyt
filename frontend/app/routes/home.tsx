@@ -7,6 +7,7 @@ import { Toast } from "~/components/Toast";
 import { AudioPlayer } from "~/components/AudioPlayer";
 import Playlists from "~/components/Playlists";
 import { AddTrackToPlaylistDialog } from "~/components/AddTrackToPlaylistDialog";
+import { QueueDrawer } from "~/components/QueueDrawer";
 import type { Download } from "~/types/download";
 import { usePlaylists } from "~/hooks/usePlaylists";
 
@@ -43,6 +44,7 @@ export default function Home() {
   const [playingTrack, setPlayingTrack] = useState<Download | null>(null);
   const [playbackQueue, setPlaybackQueue] = useState<Download[]>([]);
   const [playbackSource, setPlaybackSource] = useState("your library");
+  const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Download | null>(null);
   const [trackForPlaylist, setTrackForPlaylist] = useState<Download | null>(null);
 
@@ -80,6 +82,19 @@ export default function Home() {
     setPlayingTrack(track);
   }, []);
 
+  const shuffleLibrary = useCallback(() => {
+    const shuffled = [...queue];
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+      const replacement = Math.floor(Math.random() * (index + 1));
+      [shuffled[index], shuffled[replacement]] = [shuffled[replacement], shuffled[index]];
+    }
+    if (!shuffled.length) return;
+    setPlaybackQueue(shuffled);
+    setPlaybackSource("shuffled library");
+    setPlayingTrack(shuffled[0]);
+    setIsQueueOpen(true);
+  }, [queue]);
+
   const confirmDelete = useCallback(async () => {
     if (!pendingDelete) return;
     try {
@@ -105,13 +120,14 @@ export default function Home() {
         {activeView === "add" ? (
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(340px,.9fr)] lg:items-center"><div className="max-w-2xl"><p className="text-xs font-bold uppercase tracking-[0.18em] text-player-accent">A calmer way to collect music</p><h2 className="mt-4 max-w-xl text-4xl font-black leading-[1.02] tracking-[-0.04em] text-player-text sm:text-6xl">Build the library you actually listen to.</h2><p className="mt-5 max-w-lg text-base leading-7 text-player-muted">Paste a YouTube link and Grabyt turns it into a ready-to-play MP3. No account, no clutter, no detours.</p><div className="mt-8 flex gap-7"><div><p className="text-2xl font-black text-player-text">MP3</p><p className="mt-1 text-xs text-player-muted">Audio-first downloads</p></div><div className="border-l border-white/10 pl-7"><p className="text-2xl font-black text-player-text">{readyAudioCount}</p><p className="mt-1 text-xs text-player-muted">Ready in your library</p></div></div></div><DownloadForm onSubmit={handleSubmit} isSubmitting={isSubmitting}/></div>
         ) : activeView === "library" ? (
-          <DownloadHistory downloads={library} isLoading={isLoading} query={query} filter={filter} sort={sort} onQueryChange={setQuery} onFilterChange={setFilter} onSortChange={setSort} onPlay={playFromLibrary} onDelete={setPendingDelete} onAddToPlaylist={setTrackForPlaylist}/>
+          <DownloadHistory downloads={library} isLoading={isLoading} query={query} filter={filter} sort={sort} onQueryChange={setQuery} onFilterChange={setFilter} onSortChange={setSort} onPlay={playFromLibrary} onDelete={setPendingDelete} onAddToPlaylist={setTrackForPlaylist} onShuffle={shuffleLibrary}/>
         ) : (
           <Playlists playlists={playlistApi.playlists} isLoading={playlistApi.isLoading} availableTracks={downloads.filter((track) => track.format === "audio" && track.status === "ready")} onGet={playlistApi.get} onCreate={playlistApi.create} onRename={playlistApi.update} onDelete={playlistApi.remove} onAddTrack={playlistApi.addTrack} onRemoveTrack={playlistApi.removeTrack} onReorder={playlistApi.reorderTracks} onPlay={playFromPlaylist} onNotice={(message, type = "success") => setToast({ message, type })}/>
         )}
       </div>
     </main>
-    {playingTrack && <AudioPlayer track={playingTrack} queue={playbackQueue} sourceLabel={playbackSource} onSelect={setPlayingTrack} onClose={() => setPlayingTrack(null)} />}
+    {playingTrack && <AudioPlayer track={playingTrack} queue={playbackQueue} sourceLabel={playbackSource} onSelect={setPlayingTrack} onOpenQueue={() => setIsQueueOpen(true)} onClose={() => { setPlayingTrack(null); setIsQueueOpen(false); }} />}
+    {isQueueOpen && <QueueDrawer queue={playbackQueue} currentTrack={playingTrack} sourceLabel={playbackSource} onClose={() => setIsQueueOpen(false)} onSelect={setPlayingTrack} onReorder={setPlaybackQueue} />}
     <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-white/10 bg-player-sidebar/95 px-2 py-2 backdrop-blur-xl lg:hidden" aria-label="Mobile navigation">{([ ["add", "Add"], ["library", "Library"], ["playlists", "Playlists"] ] as const).map(([view, label]) => <button key={view} onClick={() => setActiveView(view)} className={`flex flex-1 flex-col items-center gap-1 rounded-xl py-1.5 text-[11px] font-bold ${activeView === view ? "text-player-accent" : "text-player-muted"}`}><NavIcon name={view}/>{label}</button>)}</nav>
     {pendingDelete && <DeleteDialog track={pendingDelete} onCancel={() => setPendingDelete(null)} onConfirm={confirmDelete}/>} {trackForPlaylist && <AddTrackToPlaylistDialog track={trackForPlaylist} playlists={playlistApi.playlists} onClose={() => setTrackForPlaylist(null)} onChoose={async (playlistId) => { try { await playlistApi.addTrack(playlistId, trackForPlaylist.id); setToast({ message: "Added to playlist", type: "success" }); setTrackForPlaylist(null); } catch (err) { setToast({ message: err instanceof Error ? err.message : "Couldn’t add track", type: "error" }); } }} />} {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
   </div>;
