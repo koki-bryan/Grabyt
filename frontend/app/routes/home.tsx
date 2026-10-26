@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { Route } from "./+types/home";
 import { useDownloads } from "~/hooks/useDownloads";
 import { DownloadForm } from "~/components/DownloadForm";
@@ -106,6 +107,7 @@ export default function Home() {
     } catch { setToast({ message: "Couldn’t remove that track", type: "error" }); }
     finally { setPendingDelete(null); }
   }, [pendingDelete, playingTrack?.id, playlistApi, removeDownload]);
+  const shouldReduceMotion = useReducedMotion();
 
   return <div className="min-h-screen bg-player-base text-player-text">
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-white/8 bg-player-sidebar px-3 py-5 lg:flex">
@@ -115,7 +117,7 @@ export default function Home() {
     </aside>
     <main className={`min-h-screen pb-24 lg:ml-60 ${playingTrack ? "lg:pb-28" : ""}`}>
       <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-white/8 bg-player-base/85 px-5 backdrop-blur-xl sm:px-8"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-player-muted">Grabyt</p><h1 className="mt-0.5 text-base font-bold text-player-text">{activeView === "add" ? "Add music" : activeView === "library" ? "Your library" : "Playlists"}</h1></div><span className="rounded-full border border-white/10 bg-white/[0.035] px-3 py-1.5 text-xs font-semibold text-player-muted">{readyAudioCount} ready</span></header>
-      <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 sm:py-12">
+      <AnimatePresence initial={false} mode="wait"><motion.div key={activeView} initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={shouldReduceMotion ? undefined : { opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }} className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 sm:py-12">
         {error && <div role="alert" className="mb-6 flex items-center justify-between gap-4 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200"><span>{error}</span><button onClick={clearError} className="shrink-0 font-bold text-red-100 hover:text-white">Dismiss</button></div>}
         {activeView === "add" ? (
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(340px,.9fr)] lg:items-center"><div className="max-w-2xl"><p className="text-xs font-bold uppercase tracking-[0.18em] text-player-accent">A calmer way to collect music</p><h2 className="mt-4 max-w-xl text-4xl font-black leading-[1.02] tracking-[-0.04em] text-player-text sm:text-6xl">Build the library you actually listen to.</h2><p className="mt-5 max-w-lg text-base leading-7 text-player-muted">Paste a YouTube link and Grabyt turns it into a ready-to-play MP3. No account, no clutter, no detours.</p><div className="mt-8 flex gap-7"><div><p className="text-2xl font-black text-player-text">MP3</p><p className="mt-1 text-xs text-player-muted">Audio-first downloads</p></div><div className="border-l border-white/10 pl-7"><p className="text-2xl font-black text-player-text">{readyAudioCount}</p><p className="mt-1 text-xs text-player-muted">Ready in your library</p></div></div></div><DownloadForm onSubmit={handleSubmit} isSubmitting={isSubmitting}/></div>
@@ -124,11 +126,11 @@ export default function Home() {
         ) : (
           <Playlists playlists={playlistApi.playlists} isLoading={playlistApi.isLoading} availableTracks={downloads.filter((track) => track.format === "audio" && track.status === "ready")} onGet={playlistApi.get} onCreate={playlistApi.create} onRename={playlistApi.update} onDelete={playlistApi.remove} onAddTrack={playlistApi.addTrack} onRemoveTrack={playlistApi.removeTrack} onReorder={playlistApi.reorderTracks} onPlay={playFromPlaylist} onNotice={(message, type = "success") => setToast({ message, type })}/>
         )}
-      </div>
+      </motion.div></AnimatePresence>
     </main>
-    {playingTrack && <AudioPlayer track={playingTrack} queue={playbackQueue} sourceLabel={playbackSource} onSelect={setPlayingTrack} onOpenQueue={() => setIsQueueOpen(true)} onClose={() => { setPlayingTrack(null); setIsQueueOpen(false); }} />}
-    {isQueueOpen && <QueueDrawer queue={playbackQueue} currentTrack={playingTrack} sourceLabel={playbackSource} onClose={() => setIsQueueOpen(false)} onSelect={setPlayingTrack} onReorder={setPlaybackQueue} />}
+    <AnimatePresence>{playingTrack && <AudioPlayer track={playingTrack} queue={playbackQueue} sourceLabel={playbackSource} onSelect={setPlayingTrack} onOpenQueue={() => setIsQueueOpen(true)} onClose={() => { setPlayingTrack(null); setIsQueueOpen(false); }} />}</AnimatePresence>
+    <AnimatePresence>{isQueueOpen && <QueueDrawer queue={playbackQueue} currentTrack={playingTrack} sourceLabel={playbackSource} onClose={() => setIsQueueOpen(false)} onSelect={setPlayingTrack} onReorder={setPlaybackQueue} />}</AnimatePresence>
     <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-white/10 bg-player-sidebar/95 px-2 py-2 backdrop-blur-xl lg:hidden" aria-label="Mobile navigation">{([ ["add", "Add"], ["library", "Library"], ["playlists", "Playlists"] ] as const).map(([view, label]) => <button key={view} onClick={() => setActiveView(view)} className={`flex flex-1 flex-col items-center gap-1 rounded-xl py-1.5 text-[11px] font-bold ${activeView === view ? "text-player-accent" : "text-player-muted"}`}><NavIcon name={view}/>{label}</button>)}</nav>
-    {pendingDelete && <DeleteDialog track={pendingDelete} onCancel={() => setPendingDelete(null)} onConfirm={confirmDelete}/>} {trackForPlaylist && <AddTrackToPlaylistDialog track={trackForPlaylist} playlists={playlistApi.playlists} onClose={() => setTrackForPlaylist(null)} onChoose={async (playlistId) => { try { await playlistApi.addTrack(playlistId, trackForPlaylist.id); setToast({ message: "Added to playlist", type: "success" }); setTrackForPlaylist(null); } catch (err) { setToast({ message: err instanceof Error ? err.message : "Couldn’t add track", type: "error" }); } }} />} {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+    {pendingDelete && <DeleteDialog track={pendingDelete} onCancel={() => setPendingDelete(null)} onConfirm={confirmDelete}/>} {trackForPlaylist && <AddTrackToPlaylistDialog track={trackForPlaylist} playlists={playlistApi.playlists} onClose={() => setTrackForPlaylist(null)} onChoose={async (playlistId) => { try { await playlistApi.addTrack(playlistId, trackForPlaylist.id); setToast({ message: "Added to playlist", type: "success" }); setTrackForPlaylist(null); } catch (err) { setToast({ message: err instanceof Error ? err.message : "Couldn’t add track", type: "error" }); } }} />} <AnimatePresence>{toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}</AnimatePresence>
   </div>;
 }

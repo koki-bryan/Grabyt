@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import type { Download } from "~/types/download";
 import { getDownloadStreamUrl } from "~/services/api";
 
@@ -17,6 +18,7 @@ function formatTime(seconds: number) {
 }
 
 export function AudioPlayer({ track, queue, sourceLabel, onSelect, onOpenQueue, onClose }: AudioPlayerProps) {
+  const shouldReduceMotion = useReducedMotion();
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -54,7 +56,7 @@ export function AudioPlayer({ track, queue, sourceLabel, onSelect, onOpenQueue, 
   }, []);
 
   const progress = duration ? Math.min((currentTime / duration) * 100, 100) : 0;
-  return <aside className="fixed inset-x-0 bottom-14 z-50 border-t border-white/10 bg-player-dock/95 px-4 py-3 shadow-[0_-16px_45px_rgba(0,0,0,.26)] backdrop-blur-xl lg:bottom-0 lg:left-60">
+  return <motion.aside initial={shouldReduceMotion ? false : { opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={shouldReduceMotion ? undefined : { opacity: 0, y: 24 }} transition={{ duration: 0.22, ease: "easeOut" }} className="fixed inset-x-0 bottom-14 z-50 border-t border-white/10 bg-player-dock/95 px-4 py-3 shadow-[0_-16px_45px_rgba(0,0,0,.26)] backdrop-blur-xl lg:bottom-0 lg:left-60">
     <audio ref={audioRef} src={getDownloadStreamUrl(track.id)} onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime ?? 0)} onLoadedMetadata={() => setDuration(audioRef.current?.duration || track.duration_seconds || 0)} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => canGoForward ? changeTrack(1) : setIsPlaying(false)} preload="metadata" />
     <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:grid-cols-[minmax(190px,1fr)_minmax(280px,1.4fr)_minmax(190px,1fr)]">
       <div className="flex min-w-0 items-center gap-3">
@@ -67,5 +69,5 @@ export function AudioPlayer({ track, queue, sourceLabel, onSelect, onOpenQueue, 
       </div>
       <div className="flex items-center justify-end gap-2"><div className="hidden items-center gap-2 lg:flex"><svg viewBox="0 0 24 24" className="h-4 w-4 text-player-muted" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M5 9v6h4l5 4V5L9 9H5Z"/><path d="M17 9a4 4 0 0 1 0 6"/></svg><input type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => updateVolume(Number(event.target.value))} className="player-range h-1.5 w-20" aria-label="Volume" style={{ "--progress": `${volume * 100}%` } as React.CSSProperties}/></div><div className="flex items-center gap-1 lg:hidden"><button onClick={() => changeTrack(-1)} disabled={!canGoBack} className="rounded p-1.5 text-player-muted disabled:opacity-30" aria-label="Previous track">◀</button><button onClick={togglePlay} className="flex h-9 w-9 items-center justify-center rounded-full bg-player-text text-player-base" aria-label={isPlaying ? "Pause" : "Play"}>{isPlaying ? "Ⅱ" : "▶"}</button><button onClick={() => changeTrack(1)} disabled={!canGoForward} className="rounded p-1.5 text-player-muted disabled:opacity-30" aria-label="Next track">▶</button></div><button onClick={onOpenQueue} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold text-player-muted transition hover:bg-white/8 hover:text-player-text" aria-label="Show queue"><svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="1.5" fill="currentColor"/></svg><span className="hidden sm:inline">{queue.length}</span></button><button onClick={onClose} className="rounded-lg p-2 text-player-muted transition hover:bg-white/8 hover:text-player-text" aria-label="Close player"><svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
     </div>
-  </aside>;
+  </motion.aside>;
 }

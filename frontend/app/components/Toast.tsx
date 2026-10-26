@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 
 interface ToastProps {
   message: string;
@@ -7,6 +8,7 @@ interface ToastProps {
 }
 
 export function Toast({ message, type, onClose }: ToastProps) {
+  const shouldReduceMotion = useReducedMotion();
   useEffect(() => {
     const timer = setTimeout(onClose, 4000);
     return () => clearTimeout(timer);
@@ -18,10 +20,14 @@ export function Toast({ message, type, onClose }: ToastProps) {
       : "bg-red-600 text-white";
 
   return (
-    <div
+    <motion.div
       role="alert"
       aria-live="assertive"
-      className={`fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-lg px-4 py-3 shadow-lg animate-slide-up ${styles}`}
+      initial={shouldReduceMotion ? false : { opacity: 0, y: 12, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={shouldReduceMotion ? undefined : { opacity: 0, y: 8, scale: 0.98 }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
+      className={`fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-lg px-4 py-3 shadow-lg ${styles}`}
     >
       <span className="text-sm font-medium">{message}</span>
       <button
@@ -43,6 +49,6 @@ export function Toast({ message, type, onClose }: ToastProps) {
           />
         </svg>
       </button>
-    </div>
+    </motion.div>
   );
 }
