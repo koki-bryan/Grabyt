@@ -10,6 +10,7 @@ from starlette.requests import Request
 
 from app.config import settings
 from app.routes.downloads import router as downloads_router
+from app.routes.playlists import router as playlists_router
 
 # Configure structured logging
 logging.basicConfig(
@@ -65,6 +66,7 @@ app.add_middleware(RequestLoggingMiddleware)
 
 # Routers
 app.include_router(downloads_router)
+app.include_router(playlists_router)
 
 
 @app.get("/api/health")

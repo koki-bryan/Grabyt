@@ -47,3 +47,42 @@ class DownloadResponse(BaseModel):
     expires_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+
+class PlaylistCreate(BaseModel):
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        name = value.strip()
+        if not name:
+            raise ValueError("Playlist name cannot be empty")
+        if len(name) > 100:
+            raise ValueError("Playlist name must be 100 characters or fewer")
+        return name
+
+
+class PlaylistUpdate(PlaylistCreate):
+    pass
+
+
+class PlaylistTrackCreate(BaseModel):
+    download_id: uuid.UUID
+
+
+class PlaylistTrackOrder(BaseModel):
+    download_ids: list[uuid.UUID]
+
+
+class PlaylistSummary(BaseModel):
+    id: uuid.UUID
+    name: str
+    created_at: datetime
+    updated_at: datetime
+    track_count: int
+    artwork_urls: list[str]
+
+
+class PlaylistDetail(PlaylistSummary):
+    tracks: list[DownloadResponse]

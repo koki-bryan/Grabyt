@@ -23,6 +23,7 @@ def _create_test_app():
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
     from app.routes.downloads import router as downloads_router
+    from app.routes.playlists import router as playlists_router
 
     @asynccontextmanager
     async def test_lifespan(app: FastAPI):
@@ -38,6 +39,7 @@ def _create_test_app():
         allow_headers=["*"],
     )
     test_app.include_router(downloads_router)
+    test_app.include_router(playlists_router)
 
     @test_app.get("/api/health")
     async def health_check() -> dict:

@@ -1,6 +1,8 @@
 """Integration tests for the music download backend."""
 
 import asyncio
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -132,6 +134,112 @@ class TestFileServing:
         response = await async_client.get(f"/api/downloads/{download_id}/file")
         assert response.status_code == 404
         assert "not available" in response.json()["detail"]
+
+
+class TestPlaylists:
+    async def test_playlist_crud_membership_and_cleanup(
+        self,
+        async_client: AsyncClient,
+        db_session,
+        ready_download: Download,
+    ):
+        create_playlist = await async_client.post(
+            "/api/playlists", json={"name": "  Late-night finds  "}
+        )
+        assert create_playlist.status_code == 201
+        playlist = create_playlist.json()
+        assert playlist["name"] == "Late-night finds"
+        assert playlist["track_count"] == 0
+
+        queued_download = await async_client.post(
+            "/api/downloads",
+            json={
+                "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "format": "audio",
+            },
+        )
+        ineligible = await async_client.post(
+            f"/api/playlists/{playlist['id']}/tracks",
+            json={"download_id": queued_download.json()["id"]},
+        )
+        assert ineligible.status_code == 422
+
+        add_first = await async_client.post(
+            f"/api/playlists/{playlist['id']}/tracks",
+            json={"download_id": str(ready_download.id)},
+        )
+        assert add_first.status_code == 200
+        assert [track["id"] for track in add_first.json()["tracks"]] == [
+            str(ready_download.id)
+        ]
+
+        duplicate = await async_client.post(
+            f"/api/playlists/{playlist['id']}/tracks",
+            json={"download_id": str(ready_download.id)},
+        )
+        assert duplicate.status_code == 409
+
+        second = Download(
+            id=uuid.uuid4(),
+            url="https://www.youtube.com/watch?v=testready22",
+            title="Second Ready Song",
+            format="audio",
+            status="ready",
+            created_at=datetime.now(timezone.utc),
+        )
+        db_session.add(second)
+        await db_session.commit()
+
+        add_second = await async_client.post(
+            f"/api/playlists/{playlist['id']}/tracks",
+            json={"download_id": str(second.id)},
+        )
+        assert add_second.status_code == 200
+
+        reordered = await async_client.put(
+            f"/api/playlists/{playlist['id']}/tracks/order",
+            json={"download_ids": [str(second.id), str(ready_download.id)]},
+        )
+        assert reordered.status_code == 200
+        assert [track["id"] for track in reordered.json()["tracks"]] == [
+            str(second.id), str(ready_download.id)
+        ]
+
+        removed = await async_client.delete(
+            f"/api/playlists/{playlist['id']}/tracks/{second.id}"
+        )
+        assert removed.status_code == 200
+        assert [track["id"] for track in removed.json()["tracks"]] == [
+            str(ready_download.id)
+        ]
+
+        restored = await async_client.post(
+            f"/api/playlists/{playlist['id']}/tracks",
+            json={"download_id": str(second.id)},
+        )
+        assert restored.status_code == 200
+
+        invalid_order = await async_client.put(
+            f"/api/playlists/{playlist['id']}/tracks/order",
+            json={"download_ids": [str(second.id)]},
+        )
+        assert invalid_order.status_code == 422
+
+        await async_client.delete(f"/api/downloads/{second.id}")
+        after_download_delete = await async_client.get(f"/api/playlists/{playlist['id']}")
+        assert after_download_delete.status_code == 200
+        assert [track["id"] for track in after_download_delete.json()["tracks"]] == [
+            str(ready_download.id)
+        ]
+
+        renamed = await async_client.patch(
+            f"/api/playlists/{playlist['id']}", json={"name": "Road trip"}
+        )
+        assert renamed.status_code == 200
+        assert renamed.json()["name"] == "Road trip"
+
+        deleted = await async_client.delete(f"/api/playlists/{playlist['id']}")
+        assert deleted.status_code == 204
 
     async def test_stream_ready_audio_inline(
         self, async_client: AsyncClient, ready_download: Download
