@@ -133,6 +133,29 @@ class TestFileServing:
         assert response.status_code == 404
         assert "not available" in response.json()["detail"]
 
+    async def test_stream_ready_audio_inline(
+        self, async_client: AsyncClient, ready_download: Download
+    ):
+        response = await async_client.get(
+            f"/api/downloads/{ready_download.id}/stream"
+        )
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "audio/mpeg"
+        assert "inline" in response.headers["content-disposition"]
+
+    async def test_stream_rejects_non_ready_download(self, async_client: AsyncClient):
+        create_resp = await async_client.post(
+            "/api/downloads",
+            json={
+                "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "format": "audio",
+            },
+        )
+        response = await async_client.get(
+            f"/api/downloads/{create_resp.json()['id']}/stream"
+        )
+        assert response.status_code == 404
+
 
 class TestCleanup:
     async def test_cleanup_expired_downloads(self, expired_download: Download):

@@ -1,178 +1,69 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Download } from "~/types/download";
-import { getDownloadFileUrl } from "~/services/api";
+import { getDownloadStreamUrl } from "~/services/api";
 
 interface AudioPlayerProps {
   track: Download;
+  queue: Download[];
+  onSelect: (track: Download) => void;
   onClose: () => void;
 }
 
-export function AudioPlayer({ track, onClose }: AudioPlayerProps) {
+function formatTime(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "0:00";
+  return `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60).toString().padStart(2, "0")}`;
+}
+
+export function AudioPlayer({ track, queue, onSelect, onClose }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-
-  const audioUrl = getDownloadFileUrl(track.id);
+  const [duration, setDuration] = useState(track.duration_seconds ?? 0);
+  const [volume, setVolume] = useState(0.85);
+  const index = queue.findIndex((item) => item.id === track.id);
+  const canGoBack = index > 0;
+  const canGoForward = index >= 0 && index < queue.length - 1;
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-
-    // Auto-play when track changes
+    setCurrentTime(0);
+    setDuration(track.duration_seconds ?? 0);
+    audio.volume = volume;
     audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
-
-    return () => {
-      audio.pause();
-    };
+    return () => audio.pause();
   }, [track.id]);
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
-
-    if (isPlaying) {
-      audio.pause();
-      setIsPlaying(false);
-    } else {
-      audio.play().then(() => setIsPlaying(true)).catch(() => {});
-    }
-  }, [isPlaying]);
-
-  const handleTimeUpdate = useCallback(() => {
-    const audio = audioRef.current;
-    if (audio) setCurrentTime(audio.currentTime);
+    if (audio.paused) audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+    else { audio.pause(); setIsPlaying(false); }
   }, []);
 
-  const handleLoadedMetadata = useCallback(() => {
-    const audio = audioRef.current;
-    if (audio) setDuration(audio.duration);
+  const changeTrack = useCallback((offset: number) => {
+    const nextTrack = queue[index + offset];
+    if (nextTrack) onSelect(nextTrack);
+  }, [index, onSelect, queue]);
+
+  const updateVolume = useCallback((value: number) => {
+    setVolume(value);
+    if (audioRef.current) audioRef.current.volume = value;
   }, []);
 
-  const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const audio = audioRef.current;
-    if (!audio || !duration) return;
-
-    const rect = e.currentTarget.getBoundingClientRect();
-    const percent = (e.clientX - rect.left) / rect.width;
-    audio.currentTime = percent * duration;
-  }, [duration]);
-
-  const handleEnded = useCallback(() => {
-    setIsPlaying(false);
-    setCurrentTime(0);
-  }, []);
-
-  function formatTime(seconds: number): string {
-    if (!seconds || !isFinite(seconds)) return "0:00";
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  }
-
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
-
-  return (
-    <div className="sticky bottom-0 z-30 border-t border-beige-200 bg-white px-6 py-3">
-      <audio
-        ref={audioRef}
-        src={audioUrl}
-        onTimeUpdate={handleTimeUpdate}
-        onLoadedMetadata={handleLoadedMetadata}
-        onEnded={handleEnded}
-        preload="metadata"
-      />
-
-      <div className="flex items-center gap-4">
-        {/* Track info */}
-        <div className="flex items-center gap-3 min-w-0 flex-shrink-0 max-w-[200px]">
-          {track.thumbnail ? (
-            <img
-              src={track.thumbnail}
-              alt={track.title}
-              className="h-10 w-10 rounded object-cover"
-            />
-          ) : (
-            <div className="h-10 w-10 rounded bg-beige-200 flex items-center justify-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-beige-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 18V5l12-2v13" />
-                <circle cx="6" cy="18" r="3" />
-                <circle cx="18" cy="16" r="3" />
-              </svg>
-            </div>
-          )}
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-gray-900">
-              {track.title}
-            </p>
-            <p className="text-xs text-beige-500">{track.duration}</p>
-          </div>
-        </div>
-
-        {/* Controls */}
-        <div className="flex flex-1 items-center gap-3">
-          {/* Play/Pause */}
-          <button
-            onClick={togglePlay}
-            aria-label={isPlaying ? "Pause" : "Play"}
-            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-beige-700 text-white transition hover:bg-beige-800"
-          >
-            {isPlaying ? (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                <rect x="6" y="4" width="4" height="16" rx="1" />
-                <rect x="14" y="4" width="4" height="16" rx="1" />
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                <polygon points="5 3 19 12 5 21 5 3" />
-              </svg>
-            )}
-          </button>
-
-          {/* Time + Progress bar */}
-          <span className="text-xs text-beige-500 w-10 text-right flex-shrink-0">
-            {formatTime(currentTime)}
-          </span>
-
-          <div
-            className="relative h-1.5 flex-1 cursor-pointer rounded-full bg-beige-200"
-            onClick={handleSeek}
-            role="slider"
-            aria-label="Seek audio"
-            aria-valuenow={Math.round(progress)}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <div
-              className="absolute inset-y-0 left-0 rounded-full bg-beige-600 transition-[width] duration-100"
-              style={{ width: `${progress}%` }}
-            />
-            <div
-              className="absolute top-1/2 -translate-y-1/2 h-3 w-3 rounded-full bg-beige-700 shadow-sm transition-[left] duration-100"
-              style={{ left: `calc(${progress}% - 6px)` }}
-            />
-          </div>
-
-          <span className="text-xs text-beige-500 w-10 flex-shrink-0">
-            {formatTime(duration)}
-          </span>
-        </div>
-
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          aria-label="Close player"
-          className="flex-shrink-0 rounded p-1.5 text-beige-400 transition hover:bg-beige-100 hover:text-beige-700"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path
-              fillRule="evenodd"
-              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </button>
+  const progress = duration ? Math.min((currentTime / duration) * 100, 100) : 0;
+  return <aside className="fixed inset-x-0 bottom-14 z-50 border-t border-white/10 bg-player-dock/95 px-4 py-3 shadow-[0_-16px_45px_rgba(0,0,0,.26)] backdrop-blur-xl lg:bottom-0 lg:left-60">
+    <audio ref={audioRef} src={getDownloadStreamUrl(track.id)} onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime ?? 0)} onLoadedMetadata={() => setDuration(audioRef.current?.duration || track.duration_seconds || 0)} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => canGoForward ? changeTrack(1) : setIsPlaying(false)} preload="metadata" />
+    <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:grid-cols-[minmax(190px,1fr)_minmax(280px,1.4fr)_minmax(190px,1fr)]">
+      <div className="flex min-w-0 items-center gap-3">
+        {track.thumbnail_url ? <img src={track.thumbnail_url} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" /> : <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-player-raised text-player-muted"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>}
+        <div className="min-w-0"><p className="truncate text-sm font-semibold text-player-text">{track.title ?? "Unknown track"}</p><p className="mt-0.5 text-xs text-player-muted">Playing from your library</p></div>
       </div>
+      <div className="hidden min-w-0 lg:block">
+        <div className="mb-2 flex items-center justify-center gap-4"><button onClick={() => changeTrack(-1)} disabled={!canGoBack} className="text-player-muted transition hover:text-player-text disabled:cursor-not-allowed disabled:opacity-30" aria-label="Previous track"><svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor"><path d="M6 6v12h2V6H6Zm3 6 9 6V6l-9 6Z"/></svg></button><button onClick={togglePlay} className="flex h-9 w-9 items-center justify-center rounded-full bg-player-text text-player-base transition hover:scale-105 hover:bg-player-accent" aria-label={isPlaying ? "Pause" : "Play"}>{isPlaying ? <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor"><path d="M7 5h3v14H7zm7 0h3v14h-3z"/></svg> : <svg viewBox="0 0 24 24" className="ml-0.5 h-4 w-4" fill="currentColor"><path d="m8 5 11 7-11 7V5Z"/></svg>}</button><button onClick={() => changeTrack(1)} disabled={!canGoForward} className="text-player-muted transition hover:text-player-text disabled:cursor-not-allowed disabled:opacity-30" aria-label="Next track"><svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor"><path d="M16 6v12h2V6h-2Zm-10 6 9 6V6l-9 6Z"/></svg></button></div>
+        <div className="flex items-center gap-2 text-[10px] tabular-nums text-player-muted"><span>{formatTime(currentTime)}</span><input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(event) => { const value = Number(event.target.value); if (audioRef.current) audioRef.current.currentTime = value; setCurrentTime(value); }} className="player-range h-1.5 flex-1" aria-label="Seek track" style={{ "--progress": `${progress}%` } as React.CSSProperties}/><span>{formatTime(duration)}</span></div>
+      </div>
+      <div className="flex items-center justify-end gap-3"><div className="hidden items-center gap-2 lg:flex"><svg viewBox="0 0 24 24" className="h-4 w-4 text-player-muted" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M5 9v6h4l5 4V5L9 9H5Z"/><path d="M17 9a4 4 0 0 1 0 6"/></svg><input type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => updateVolume(Number(event.target.value))} className="player-range h-1.5 w-20" aria-label="Volume" style={{ "--progress": `${volume * 100}%` } as React.CSSProperties}/></div><button onClick={togglePlay} className="flex h-9 w-9 items-center justify-center rounded-full bg-player-text text-player-base lg:hidden" aria-label={isPlaying ? "Pause" : "Play"}>{isPlaying ? "Ⅱ" : "▶"}</button><button onClick={onClose} className="rounded-lg p-2 text-player-muted transition hover:bg-white/8 hover:text-player-text" aria-label="Close player"><svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
     </div>
-  );
+  </aside>;
 }

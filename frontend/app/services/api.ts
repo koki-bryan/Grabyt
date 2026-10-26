@@ -33,6 +33,19 @@ export async function getDownloads(): Promise<Download[]> {
   return handleResponse<Download[]>(response);
 }
 
+export async function deleteDownload(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/downloads/${id}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw new Error('Failed to delete download');
+  }
+}
+
 export function getDownloadFileUrl(id: string): string {
   return `${API_BASE}/downloads/${id}/file`;
+}
+
+export function getDownloadStreamUrl(id: string): string {
+  return `${API_BASE}/downloads/${id}/stream`;
 }

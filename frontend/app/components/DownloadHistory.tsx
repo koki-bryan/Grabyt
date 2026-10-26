@@ -1,302 +1,68 @@
-import type { Download, DownloadStatus, DownloadFormat } from "~/types/download";
+import type { Download, DownloadStatus } from "~/types/download";
 import { getDownloadFileUrl } from "~/services/api";
+
+export type LibraryFilter = "all" | "ready" | "active" | "issues";
+export type LibrarySort = "newest" | "title" | "longest";
 
 interface DownloadHistoryProps {
   downloads: Download[];
   isLoading: boolean;
+  query: string;
+  filter: LibraryFilter;
+  sort: LibrarySort;
+  onQueryChange: (value: string) => void;
+  onFilterChange: (value: LibraryFilter) => void;
+  onSortChange: (value: LibrarySort) => void;
   onPlay?: (download: Download) => void;
+  onDelete?: (download: Download) => void;
+}
+
+function formatDuration(seconds: number | null): string {
+  if (!seconds) return "—";
+  return `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60).toString().padStart(2, "0")}`;
+}
+
+function formatDate(value: string): string {
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
 }
 
 function StatusBadge({ status }: { status: DownloadStatus }) {
-  const styles: Record<DownloadStatus, string> = {
-    queued: "bg-yellow-100 text-yellow-700",
-    downloading: "bg-blue-100 text-blue-700",
-    ready: "bg-green-100 text-green-700",
-    expired: "bg-gray-100 text-gray-500",
-    failed: "bg-red-100 text-red-700",
-  };
-
-  return (
-    <span
-      role="status"
-      aria-label={`Status: ${status}`}
-      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium capitalize ${styles[status]}`}
-    >
-      {status}
-    </span>
-  );
+  const labels: Record<DownloadStatus, string> = { queued: "Queued", downloading: "Preparing", ready: "Ready", expired: "Expired", failed: "Failed" };
+  const styles: Record<DownloadStatus, string> = { queued: "bg-player-accent/15 text-player-accent", downloading: "bg-sky-400/15 text-sky-300", ready: "bg-emerald-400/15 text-emerald-300", expired: "bg-white/8 text-player-muted", failed: "bg-red-400/15 text-red-300" };
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${styles[status]}`}>{labels[status]}</span>;
 }
 
-function FormatBadge({ format }: { format: DownloadFormat }) {
-  const styles: Record<DownloadFormat, string> = {
-    audio: "bg-purple-100 text-purple-700",
-    video: "bg-blue-100 text-blue-700",
-  };
-
-  return (
-    <span
-      aria-label={`Format: ${format}`}
-      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium capitalize ${styles[format]}`}
-    >
-      {format === "audio" ? "Audio" : "Video"}
-    </span>
-  );
+function TrackArt({ download }: { download: Download }) {
+  return download.thumbnail_url ? <img src={download.thumbnail_url} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" /> : <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-player-raised text-player-muted" aria-hidden="true"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>;
 }
 
-function Spinner() {
-  return (
-    <svg
-      className="h-5 w-5 animate-spin text-beige-600"
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-    >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-      />
-    </svg>
-  );
+function Actions({ download, onPlay, onDelete }: Pick<DownloadHistoryProps, "onPlay" | "onDelete"> & { download: Download }) {
+  const label = download.title ?? "download";
+  return <div className="flex items-center justify-end gap-1.5">
+    {download.format === "audio" && download.status === "ready" && onPlay && <button onClick={() => onPlay(download)} className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-player-text text-player-base transition hover:scale-105 hover:bg-player-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-player-accent" aria-label={`Play ${label}`}><svg viewBox="0 0 24 24" className="ml-0.5 h-4 w-4" fill="currentColor" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z" /></svg></button>}
+    {download.status === "ready" && <a href={getDownloadFileUrl(download.id)} download className="inline-flex h-10 w-10 items-center justify-center rounded-full text-player-muted transition hover:bg-white/8 hover:text-player-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-player-accent" aria-label={`Save ${label}`}><svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"/></svg></a>}
+    {onDelete && <button onClick={() => onDelete(download)} className="inline-flex h-10 w-10 items-center justify-center rounded-full text-player-muted transition hover:bg-red-400/10 hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-player-accent" aria-label={`Delete ${label}`}><svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13"/></svg></button>}
+  </div>;
 }
 
-function PlayButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      aria-label="Play audio"
-      className="inline-flex items-center justify-center rounded-full bg-beige-700 h-8 w-8 text-white transition hover:bg-beige-800 hover:scale-105"
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 ml-0.5" viewBox="0 0 24 24" fill="currentColor">
-        <polygon points="5 3 19 12 5 21 5 3" />
-      </svg>
-    </button>
-  );
+function LibraryRow({ download, onPlay, onDelete }: Pick<DownloadHistoryProps, "onPlay" | "onDelete"> & { download: Download }) {
+  return <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-white/6 px-3 py-3.5 transition hover:bg-white/[0.035] sm:grid-cols-[minmax(0,1fr)_92px_100px_156px] sm:gap-5 sm:px-5">
+    <div className="flex min-w-0 items-center gap-3.5"><TrackArt download={download} /><div className="min-w-0"><p className="truncate text-sm font-semibold text-player-text">{download.title ?? "Fetching track details…"}</p><p className="mt-1 truncate text-xs text-player-muted">{download.format === "audio" ? "Music" : "Video archive"} · {formatDuration(download.duration_seconds)} · Added {formatDate(download.created_at)}</p></div></div>
+    <div className="hidden sm:block"><StatusBadge status={download.status} /></div><p className="hidden text-xs text-player-muted sm:block">{download.format === "audio" ? "MP3 audio" : "MP4 video"}</p><Actions download={download} onPlay={onPlay} onDelete={onDelete} /><div className="col-span-2 flex items-center gap-2 sm:hidden"><StatusBadge status={download.status} /></div>
+  </li>;
 }
 
-function DownloadAction({
-  download,
-  onPlay,
-}: {
-  download: Download;
-  onPlay?: (download: Download) => void;
-}) {
-  if (download.status === "ready") {
-    return (
-      <div className="flex items-center gap-2">
-        {/* Play button for audio */}
-        {download.format === "audio" && onPlay && (
-          <PlayButton onClick={() => onPlay(download)} />
-        )}
-        {/* Download link */}
-        <a
-          href={getDownloadFileUrl(download.id)}
-          download
-          aria-label={`Download ${download.title}`}
-          className="inline-flex items-center rounded-md bg-beige-100 px-3 py-1.5 text-xs font-medium text-beige-700 transition hover:bg-beige-200"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          Save
-        </a>
-      </div>
-    );
-  }
-
-  if (download.status === "downloading" || download.status === "queued") {
-    return (
-      <span aria-label="Download in progress">
-        <Spinner />
-      </span>
-    );
-  }
-
-  return null;
+function LoadingState() {
+  return <div className="space-y-3 rounded-3xl border border-white/8 bg-player-panel p-5" aria-busy="true" aria-label="Loading library">{[1, 2, 3, 4].map((item) => <div key={item} className="flex items-center gap-3"><div className="h-11 w-11 animate-pulse rounded-xl bg-white/8"/><div className="flex-1 space-y-2"><div className="h-3.5 w-1/3 animate-pulse rounded bg-white/8"/><div className="h-3 w-1/4 animate-pulse rounded bg-white/5"/></div></div>)}</div>;
 }
 
-function LoadingSkeleton() {
-  return (
-    <div
-      className="space-y-3"
-      aria-busy="true"
-      aria-label="Loading download history"
-    >
-      {[1, 2, 3].map((i) => (
-        <div
-          key={i}
-          className="flex items-center gap-4 rounded-lg border border-beige-200 bg-white p-4"
-        >
-          <div className="h-12 w-20 animate-pulse rounded bg-beige-200" />
-          <div className="flex-1 space-y-2">
-            <div className="h-4 w-3/4 animate-pulse rounded bg-beige-200" />
-            <div className="h-3 w-1/2 animate-pulse rounded bg-beige-100" />
-          </div>
-          <div className="h-6 w-16 animate-pulse rounded-full bg-beige-200" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <span className="text-4xl" aria-hidden="true">
-        📭
-      </span>
-      <p className="mt-3 text-sm text-beige-600">
-        No downloads yet. Switch to the Download tab to get started!
-      </p>
-    </div>
-  );
-}
-
-function DesktopTable({
-  downloads,
-  onPlay,
-}: {
-  downloads: Download[];
-  onPlay?: (download: Download) => void;
-}) {
-  return (
-    <div className="hidden overflow-hidden rounded-lg border border-beige-200 md:block">
-      <table className="w-full text-left text-sm">
-        <thead className="border-b border-beige-200 bg-beige-100 text-xs uppercase text-beige-600">
-          <tr>
-            <th className="px-4 py-3">Thumbnail</th>
-            <th className="px-4 py-3">Title</th>
-            <th className="px-4 py-3">Duration</th>
-            <th className="px-4 py-3">Format</th>
-            <th className="px-4 py-3">Quality</th>
-            <th className="px-4 py-3">Status</th>
-            <th className="px-4 py-3">Action</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-beige-100">
-          {downloads.map((download) => (
-            <tr
-              key={download.id}
-              className="animate-fade-in transition hover:bg-beige-50"
-            >
-              <td className="px-4 py-3">
-                {download.thumbnail ? (
-                  <img
-                    src={download.thumbnail}
-                    alt={download.title}
-                    className="h-auto w-20 rounded bg-beige-200 object-cover"
-                  />
-                ) : (
-                  <div
-                    className="h-12 w-20 rounded bg-beige-200"
-                    aria-hidden="true"
-                  />
-                )}
-              </td>
-              <td className="px-4 py-3">
-                <span className="block max-w-[200px] truncate font-medium text-gray-900">
-                  {download.title}
-                </span>
-              </td>
-              <td className="px-4 py-3 text-beige-600">{download.duration}</td>
-              <td className="px-4 py-3">
-                <FormatBadge format={download.format} />
-              </td>
-              <td className="px-4 py-3 text-beige-600">{download.quality}</td>
-              <td className="px-4 py-3">
-                <StatusBadge status={download.status} />
-              </td>
-              <td className="px-4 py-3">
-                <DownloadAction download={download} onPlay={onPlay} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function MobileCards({
-  downloads,
-  onPlay,
-}: {
-  downloads: Download[];
-  onPlay?: (download: Download) => void;
-}) {
-  return (
-    <div className="space-y-3 md:hidden">
-      {downloads.map((download) => (
-        <div
-          key={download.id}
-          className="animate-fade-in rounded-lg border border-beige-200 bg-white p-4"
-        >
-          <div className="flex gap-3">
-            {download.thumbnail ? (
-              <img
-                src={download.thumbnail}
-                alt={download.title}
-                className="h-16 w-20 flex-shrink-0 rounded bg-beige-200 object-cover"
-              />
-            ) : (
-              <div
-                className="h-16 w-20 flex-shrink-0 rounded bg-beige-200"
-                aria-hidden="true"
-              />
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-gray-900">
-                {download.title}
-              </p>
-              <p className="mt-0.5 text-xs text-beige-600">
-                {download.duration}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <FormatBadge format={download.format} />
-                <StatusBadge status={download.status} />
-                <span className="text-xs text-beige-500">
-                  {download.quality}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="mt-3 flex justify-end">
-            <DownloadAction download={download} onPlay={onPlay} />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export default function DownloadHistory({
-  downloads,
-  isLoading,
-  onPlay,
-}: DownloadHistoryProps) {
-  if (isLoading && downloads.length === 0) {
-    return <LoadingSkeleton />;
-  }
-
-  if (!isLoading && downloads.length === 0) {
-    return <EmptyState />;
-  }
-
-  return (
-    <div>
-      <DesktopTable downloads={downloads} onPlay={onPlay} />
-      <MobileCards downloads={downloads} onPlay={onPlay} />
-    </div>
-  );
+export default function DownloadHistory(props: DownloadHistoryProps) {
+  const { downloads, isLoading, query, filter, sort, onQueryChange, onFilterChange, onSortChange, onPlay, onDelete } = props;
+  const readyCount = downloads.filter((item) => item.status === "ready" && item.format === "audio").length;
+  if (isLoading && downloads.length === 0) return <LoadingState />;
+  return <section aria-label="Music library">
+    <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-sm font-semibold text-player-text">{readyCount} ready {readyCount === 1 ? "track" : "tracks"}</p><p className="mt-1 text-sm text-player-muted">Everything you have saved, in one place.</p></div><div className="flex flex-col gap-2 sm:flex-row"><label className="relative block"><span className="sr-only">Search library</span><svg viewBox="0 0 24 24" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-player-muted" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search your library" className="w-full rounded-xl border border-white/10 bg-player-panel py-2.5 pl-9 pr-3 text-sm text-player-text outline-none placeholder:text-player-muted focus:border-player-accent sm:w-56" /></label><label className="sr-only" htmlFor="library-sort">Sort library</label><select id="library-sort" value={sort} onChange={(event) => onSortChange(event.target.value as LibrarySort)} className="rounded-xl border border-white/10 bg-player-panel px-3 py-2.5 text-sm text-player-text outline-none focus:border-player-accent"><option value="newest">Recently added</option><option value="title">Title A–Z</option><option value="longest">Longest first</option></select></div></div>
+    <div className="mb-5 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Library filters">{([ ["all", "All"], ["ready", "Ready"], ["active", "In progress"], ["issues", "Needs attention"] ] as const).map(([value, label]) => <button key={value} type="button" role="tab" aria-selected={filter === value} onClick={() => onFilterChange(value)} className={`whitespace-nowrap rounded-full px-3.5 py-2 text-xs font-bold transition ${filter === value ? "bg-player-text text-player-base" : "bg-white/6 text-player-muted hover:bg-white/10 hover:text-player-text"}`}>{label}</button>)}</div>
+    {downloads.length === 0 ? <div className="rounded-3xl border border-dashed border-white/15 bg-player-panel px-6 py-16 text-center"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-player-raised text-player-accent"><svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span><h2 className="mt-4 text-base font-semibold text-player-text">Your library is waiting</h2><p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-player-muted">Paste a YouTube link to add your first track. It will appear here as soon as it is ready.</p></div> : <div className="overflow-hidden rounded-3xl border border-white/8 bg-player-panel"><div className="hidden grid-cols-[minmax(0,1fr)_92px_100px_156px] gap-5 border-b border-white/8 px-5 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-player-muted sm:grid"><span>Track</span><span>Status</span><span>Format</span><span className="text-right">Actions</span></div><ul>{downloads.map((download) => <LibraryRow key={download.id} download={download} onPlay={onPlay} onDelete={onDelete} />)}</ul></div>}
+  </section>;
 }

@@ -7,15 +7,12 @@ references are held to prevent garbage collection.
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
-
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime, timezone
 
 from app.config import settings
 from app.database import async_session
 from app.models import Download
-from app.services.downloader import download_media, extract_metadata
+from app.services.downloader import download_with_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +24,7 @@ _active_tasks: set[asyncio.Task] = set()
 
 
 async def process_download(download_id: str) -> None:
-    """Process a single download: extract metadata, download file, update DB."""
+    """Process a single download: download file + extract metadata in one pass."""
     async with _semaphore:
         async with async_session() as session:
             download = await session.get(Download, download_id)
@@ -40,22 +37,14 @@ async def process_download(download_id: str) -> None:
                 download.status = "downloading"
                 await session.commit()
 
-                # Extract metadata
-                logger.info("Extracting metadata for %s", download.url)
-                metadata = await extract_metadata(download.url)
-                download.title = metadata.title
-                download.thumbnail_url = metadata.thumbnail_url
-                download.duration_seconds = metadata.duration_seconds
-                await session.commit()
-
-                # Download the file
+                # Single-pass download + metadata extraction
                 logger.info(
                     "Downloading %s (%s, quality=%s)",
                     download.url,
                     download.format,
                     download.quality,
                 )
-                file_path = await download_media(
+                result = await download_with_metadata(
                     download_id=str(download.id),
                     url=download.url,
                     format=download.format,
@@ -63,16 +52,16 @@ async def process_download(download_id: str) -> None:
                     download_dir=settings.download_dir,
                 )
 
-                # Mark as ready
+                # Update record with metadata and file info
                 now = datetime.now(timezone.utc)
-                download.file_path = file_path
+                download.title = result.metadata.title
+                download.thumbnail_url = result.metadata.thumbnail_url
+                download.duration_seconds = result.metadata.duration_seconds
+                download.file_path = result.file_path
                 download.status = "ready"
                 download.completed_at = now
-                download.expires_at = now + timedelta(
-                    minutes=settings.file_ttl_minutes
-                )
                 await session.commit()
-                logger.info("Download %s complete: %s", download_id, file_path)
+                logger.info("Download %s complete: %s", download_id, result.file_path)
 
             except Exception as e:
                 logger.exception("Download %s failed", download_id)

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { Download, CreateDownloadRequest } from "~/types/download";
-import { createDownload, getDownloads } from "~/services/api";
+import { createDownload, getDownloads, deleteDownload as apiDeleteDownload } from "~/services/api";
 
 export function useDownloads() {
   const [downloads, setDownloads] = useState<Download[]>([]);
@@ -83,6 +83,11 @@ export function useDownloads() {
     []
   );
 
+  const removeDownload = useCallback(async (id: string) => {
+    await apiDeleteDownload(id);
+    setDownloads((prev) => prev.filter((d) => d.id !== id));
+  }, []);
+
   const clearError = useCallback(() => {
     setError(null);
   }, []);
@@ -93,6 +98,7 @@ export function useDownloads() {
     isSubmitting,
     error,
     submitDownload,
+    removeDownload,
     clearError,
   };
 }

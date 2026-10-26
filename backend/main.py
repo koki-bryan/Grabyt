@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import os
 import time
@@ -11,7 +10,6 @@ from starlette.requests import Request
 
 from app.config import settings
 from app.routes.downloads import router as downloads_router
-from app.services.cleanup import cleanup_loop
 
 # Configure structured logging
 logging.basicConfig(
@@ -45,18 +43,8 @@ async def lifespan(app: FastAPI):
     os.makedirs(settings.download_dir, exist_ok=True)
     logger.info("Downloads directory: %s", os.path.abspath(settings.download_dir))
 
-    # Start periodic cleanup task
-    cleanup_task = asyncio.create_task(cleanup_loop(interval_seconds=300))
-    logger.info("Cleanup loop started")
-
     yield
 
-    # Shutdown: cancel cleanup task
-    cleanup_task.cancel()
-    try:
-        await cleanup_task
-    except asyncio.CancelledError:
-        pass
     logger.info("Shutdown complete")
 
 

@@ -1,7 +1,8 @@
 """yt-dlp subprocess download service.
 
 Provides async functions to extract metadata and download media files
-using yt-dlp as a subprocess.
+using yt-dlp as a subprocess. Downloads and metadata extraction happen
+in a single pass to avoid redundant YouTube requests.
 """
 
 import asyncio
@@ -11,6 +12,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# Common yt-dlp args to fix YouTube 403 errors
+_YT_DLP_COMMON = [
+    "--js-runtimes", "node",
+    "--remote-components", "ejs:github",
+    "--extractor-args", "youtube:player_client=mweb",
+    "--no-playlist",
+    "--no-warnings",
+]
 
 
 @dataclass
@@ -26,39 +36,17 @@ class DownloadResult:
     metadata: MediaMetadata
 
 
-async def extract_metadata(url: str) -> MediaMetadata:
-    """Extract video metadata using yt-dlp --dump-json."""
-    proc = await asyncio.create_subprocess_exec(
-        "yt-dlp",
-        "--dump-json",
-        "--no-download",
-        "--no-warnings",
-        url,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await proc.communicate()
-
-    if proc.returncode != 0:
-        error_msg = stderr.decode().strip()
-        raise RuntimeError(f"yt-dlp metadata extraction failed: {error_msg}")
-
-    info = json.loads(stdout.decode())
-    return MediaMetadata(
-        title=info.get("title", "Unknown"),
-        thumbnail_url=info.get("thumbnail"),
-        duration_seconds=info.get("duration"),
-    )
-
-
-async def download_media(
+async def download_with_metadata(
     download_id: str,
     url: str,
     format: str,
     quality: str | None,
     download_dir: str,
-) -> str:
-    """Download media using yt-dlp subprocess.
+) -> DownloadResult:
+    """Download media and extract metadata in a single yt-dlp pass.
+
+    Uses --write-info-json to dump metadata alongside the downloaded file,
+    eliminating the need for a separate metadata extraction call.
 
     Args:
         download_id: UUID string used as the output filename stem.
@@ -68,7 +56,7 @@ async def download_media(
         download_dir: Directory to save the file.
 
     Returns:
-        The path to the downloaded file.
+        DownloadResult containing file path and metadata.
     """
     Path(download_dir).mkdir(parents=True, exist_ok=True)
     output_template = f"{download_dir}/{download_id}.%(ext)s"
@@ -78,9 +66,9 @@ async def download_media(
             "yt-dlp",
             "-x",
             "--audio-format", "mp3",
+            "--write-info-json",
             "-o", output_template,
-            "--no-playlist",
-            "--no-warnings",
+            *_YT_DLP_COMMON,
             url,
         ]
         expected_ext = "mp3"
@@ -95,9 +83,9 @@ async def download_media(
             "yt-dlp",
             "-f", format_str,
             "--merge-output-format", "mp4",
+            "--write-info-json",
             "-o", output_template,
-            "--no-playlist",
-            "--no-warnings",
+            *_YT_DLP_COMMON,
             url,
         ]
         expected_ext = "mp4"
@@ -115,17 +103,39 @@ async def download_media(
         error_msg = stderr.decode().strip() or stdout.decode().strip()
         raise RuntimeError(f"yt-dlp download failed: {error_msg}")
 
-    # Find the actual output file (yt-dlp may have changed the extension)
+    # Find the actual output file
     file_path = Path(download_dir) / f"{download_id}.{expected_ext}"
-    if file_path.exists():
-        return str(file_path)
+    if not file_path.exists():
+        # Fallback: search for any file matching the download_id prefix
+        for f in Path(download_dir).iterdir():
+            if f.stem == download_id and f.suffix != ".json":
+                file_path = f
+                break
+        else:
+            raise RuntimeError(
+                f"Download completed but output file not found. "
+                f"Expected: {file_path}"
+            )
 
-    # Fallback: search for any file matching the download_id prefix
-    for f in Path(download_dir).iterdir():
-        if f.stem == download_id:
-            return str(f)
+    # Parse metadata from the info.json file
+    info_json_path = Path(download_dir) / f"{download_id}.info.json"
+    metadata = MediaMetadata(title="Unknown", thumbnail_url=None, duration_seconds=None)
 
-    raise RuntimeError(
-        f"Download completed but output file not found. "
-        f"Expected: {file_path}"
-    )
+    if info_json_path.exists():
+        try:
+            info = json.loads(info_json_path.read_text())
+            metadata = MediaMetadata(
+                title=info.get("title", "Unknown"),
+                thumbnail_url=info.get("thumbnail"),
+                duration_seconds=info.get("duration"),
+            )
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning("Failed to parse info.json: %s", e)
+        finally:
+            # Clean up the info.json file — we don't need it anymore
+            try:
+                info_json_path.unlink()
+            except OSError:
+                pass
+
+    return DownloadResult(file_path=str(file_path), metadata=metadata)

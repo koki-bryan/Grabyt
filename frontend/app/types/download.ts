@@ -10,14 +10,17 @@ export type DownloadFormat = "audio" | "video";
 export interface Download {
   id: string;
   url: string;
-  title: string;
-  thumbnail: string;
-  duration: string;
+  title: string | null;
+  thumbnail_url: string | null;
+  duration_seconds: number | null;
   format: DownloadFormat;
-  quality: string;
+  quality: string | null;
   status: DownloadStatus;
-  createdAt: string;
-  filename?: string;
+  error_message: string | null;
+  file_path: string | null;
+  created_at: string;
+  completed_at: string | null;
+  expires_at: string | null;
 }
 
 export interface CreateDownloadRequest {

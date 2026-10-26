@@ -11,6 +11,7 @@ import type { Route } from "./+types/root";
 import "./app.css";
 
 export const links: Route.LinksFunction = () => [
+  { rel: "icon", type: "image/jpeg", href: "/icon/grabyt.jpeg" },
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   {
     rel: "preconnect",
@@ -62,12 +63,12 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-beige-50 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-player-base p-4 text-player-text">
       <div className="max-w-md text-center">
-        <h1 className="text-2xl font-bold text-beige-800">{message}</h1>
-        <p className="mt-2 text-gray-700">{details}</p>
+        <h1 className="text-2xl font-bold">{message}</h1>
+        <p className="mt-2 text-player-muted">{details}</p>
         {stack && (
-          <pre className="mt-4 w-full p-4 overflow-x-auto bg-beige-100 rounded-lg text-sm text-left">
+          <pre className="mt-4 w-full overflow-x-auto rounded-lg bg-player-panel p-4 text-left text-sm">
             <code>{stack}</code>
           </pre>
         )}
